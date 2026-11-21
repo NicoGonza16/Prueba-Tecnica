@@ -3,6 +3,7 @@ import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { CreateAccountUseCase } from '../application/create-account.use-case.js';
 import { DeleteAccountUseCase } from '../application/delete-account.use-case.js';
 import { GetCatalogUseCase } from '../application/get-catalog.use-case.js';
+import { RenameAccountUseCase } from '../application/rename-account.use-case.js';
 import {
   ACCOUNT_REPOSITORY,
   type AccountRepository,
@@ -39,6 +40,12 @@ import { InMemoryAccountRepository } from './persistence/in-memory-account.repos
       provide: DeleteAccountUseCase,
       useFactory: (accounts: AccountRepository) =>
         new DeleteAccountUseCase(accounts),
+      inject: [ACCOUNT_REPOSITORY],
+    },
+    {
+      provide: RenameAccountUseCase,
+      useFactory: (accounts: AccountRepository) =>
+        new RenameAccountUseCase(accounts),
       inject: [ACCOUNT_REPOSITORY],
     },
     // Runs the `{ schema }` given to @Body/@Param (Standard Schema / Zod).

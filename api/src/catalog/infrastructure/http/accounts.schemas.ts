@@ -14,5 +14,16 @@ export const createAccountBodySchema = z.object({
 
 export type CreateAccountBody = z.infer<typeof createAccountBodySchema>;
 
+/**
+ * Body of a rename. Strict: any key other than `name` (e.g. `code` or
+ * `nature`, which cannot change) is rejected instead of silently ignored.
+ * The 1–100 characters rule stays in the domain (INVALID_NAME).
+ */
+export const renameAccountBodySchema = z.strictObject({
+  name: z.string({ error: 'name must be a string' }),
+});
+
+export type RenameAccountBody = z.infer<typeof renameAccountBodySchema>;
+
 /** Path params always arrive as strings; the domain validates the format. */
 export const accountCodeParamSchema = z.string();

@@ -80,5 +80,27 @@ describe('Account', () => {
       const account = Account.create({ code: '1105', name: 'Caja', nature: 'DEBIT' });
       expect(() => account.rename('  ')).toThrow(InvalidAccountNameError);
     });
+
+    it('trims the new name', () => {
+      const account = Account.create({ code: '1105', name: 'Caja', nature: 'DEBIT' });
+      account.rename('  Caja general  ');
+      expect(account.name).toBe('Caja general');
+    });
+
+    it(`rejects a new name over ${MAX_NAME_LENGTH} characters`, () => {
+      const account = Account.create({ code: '1105', name: 'Caja', nature: 'DEBIT' });
+      expect(() => account.rename('a'.repeat(MAX_NAME_LENGTH + 1))).toThrow(
+        InvalidAccountNameError,
+      );
+    });
+
+    it('keeps the previous name when a rename is rejected', () => {
+      const account = Account.create({ code: '1105', name: 'Caja', nature: 'DEBIT' });
+      expect(() => account.rename('  ')).toThrow(InvalidAccountNameError);
+      expect(() => account.rename('a'.repeat(MAX_NAME_LENGTH + 1))).toThrow(
+        InvalidAccountNameError,
+      );
+      expect(account.name).toBe('Caja');
+    });
   });
 });

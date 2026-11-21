@@ -245,6 +245,129 @@ describe('Accounts (e2e)', () => {
     });
   });
 
+  describe('PATCH /accounts/:code', () => {
+    const patch = (code: string, body: unknown) =>
+      request(app.getHttpServer())
+        .patch(`/accounts/${code}`)
+        .send(body as object);
+
+    const getTree = async () =>
+      (await request(app.getHttpServer()).get('/accounts').expect(200))
+        .body as Array<Record<string, unknown> & { children: unknown[] }>;
+
+    it('200 renames a leaf and the catalog shows the new name', async () => {
+      await post({ code: '1', name: 'Activo', nature: 'DEBIT' }).expect(201);
+      await post({ code: '11', name: 'Disponible' }).expect(201);
+
+      const res = await patch('11', { name: 'Efectivo' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        code: '11',
+        name: 'Efectivo',
+        nature: 'DEBIT',
+        level: 'GROUP',
+        allowsMovements: true,
+        parentCode: '1',
+      });
+      const tree = await getTree();
+      expect(tree[0].children).toEqual([
+        {
+          code: '11',
+          name: 'Efectivo',
+          nature: 'DEBIT',
+          level: 'GROUP',
+          allowsMovements: true,
+          children: [],
+        },
+      ]);
+    });
+
+    it('200 renames a parent (allowsMovements false) and trims the name', async () => {
+      await post({ code: '2', name: 'Pasivo', nature: 'CREDIT' }).expect(201);
+      await post({ code: '21', name: 'Obligaciones' }).expect(201);
+
+      const res = await patch('2', { name: '  Pasivos  ' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        code: '2',
+        name: 'Pasivos',
+        nature: 'CREDIT',
+        level: 'CLASS',
+        allowsMovements: false,
+        parentCode: null,
+      });
+    });
+
+    it('200 renaming with the same name is idempotent', async () => {
+      await post({ code: '1', name: 'Activo', nature: 'DEBIT' }).expect(201);
+
+      const res = await patch('1', { name: 'Activo' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.name).toBe('Activo');
+    });
+
+    it.each([
+      ['a blank name', '  '],
+      ['a name over 100 characters', 'a'.repeat(101)],
+    ])('400 INVALID_NAME for %s and the name is kept', async (_, name) => {
+      await post({ code: '1', name: 'Activo', nature: 'DEBIT' }).expect(201);
+
+      const res = await patch('1', { name });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('INVALID_NAME');
+      expect(typeof res.body.detail).toBe('string');
+      const tree = await getTree();
+      expect(tree[0].name).toBe('Activo');
+    });
+
+    it('400 INVALID_CODE for an invalid code', async () => {
+      const res = await patch('abc', { name: 'X' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('INVALID_CODE');
+    });
+
+    it('404 ACCOUNT_NOT_FOUND for an unknown account', async () => {
+      const res = await patch('9', { name: 'X' });
+
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual({
+        code: 'ACCOUNT_NOT_FOUND',
+        detail: 'Account "9" was not found.',
+      });
+    });
+
+    it.each([
+      ['without name', {}],
+      ['with a non-string name', { name: 1 }],
+      ['with extra keys', { name: 'X', code: '2' }],
+    ])('400 VALIDATION_ERROR %s', async (_, body) => {
+      await post({ code: '1', name: 'Activo', nature: 'DEBIT' }).expect(201);
+
+      const res = await patch('1', body);
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('VALIDATION_ERROR');
+      expect(typeof res.body.detail).toBe('string');
+      const tree = await getTree();
+      expect(tree[0].name).toBe('Activo');
+    });
+
+    it('400 VALIDATION_ERROR for a malformed JSON body', async () => {
+      const res = await request(app.getHttpServer())
+        .patch('/accounts/1')
+        .set('Content-Type', 'application/json')
+        .send('{"name": ');
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('VALIDATION_ERROR');
+    });
+  });
+
   describe('DELETE /accounts/:code', () => {
     it('204 deletes a leaf account', async () => {
       await post({ code: '1', name: 'Activo', nature: 'DEBIT' }).expect(201);
