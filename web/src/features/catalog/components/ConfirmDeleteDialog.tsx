@@ -5,7 +5,7 @@ import { isApiError } from '../../../lib/http'
 import type { TreeNode } from '../api/types'
 import { useDeleteAccount } from '../hooks/useDeleteAccount'
 import { LEVEL_WITH_ARTICLE } from '../lib/accountCode'
-import { describeError, serverDetail } from '../lib/errorField'
+import { describeError } from '../lib/errorField'
 
 export type DeleteDialogResult = 'deleted' | 'cancelled'
 
@@ -76,7 +76,6 @@ export function ConfirmDeleteDialog({ account, onClose }: ConfirmDeleteDialogPro
           variant="compact"
           title="No se pudo eliminar la cuenta"
           message={describeError(error, { code: account.code })}
-          detail={serverDetail(error)}
         />
       )}
 

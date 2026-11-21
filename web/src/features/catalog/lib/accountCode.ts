@@ -20,6 +20,9 @@ export const LEVEL_LABELS: Record<Level, string> = {
   SUBACCOUNT: 'Subcuenta',
 }
 
+/** Longest accepted account name (same limit as the API). */
+export const MAX_NAME_LENGTH = 100
+
 /** Level name with its Spanish article, for running text ("el grupo", "la cuenta"). */
 export const LEVEL_WITH_ARTICLE: Record<Level, string> = {
   CLASS: 'la clase',

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { childCodeLength, isValidCodeLength } from '../lib/accountCode'
+import { childCodeLength, isValidCodeLength, MAX_NAME_LENGTH } from '../lib/accountCode'
 import {
   LEVELS,
   NATURES,
@@ -47,7 +47,8 @@ export type ParentContext = {
  * Builds the create-account form schema.
  *
  * Rules mirrored from the backend: code only digits with length 1/2/4/6, name
- * not blank, nature required only for a class (1 digit). When creating a child
+ * not blank and at most MAX_NAME_LENGTH characters, nature required only for a
+ * class (1 digit). When creating a child
  * of `parent`, the code must also start with the parent code and have the
  * length of the next level. Whether a free-typed parent exists is checked by
  * the backend (PARENT_NOT_FOUND), whose error is shown next to the code field.
@@ -74,7 +75,11 @@ export function buildCreateAccountSchema(parent?: ParentContext) {
         .refine((code) => childLength === null || code.length === childLength, {
           message: `Una cuenta hija de ${parent?.code ?? ''} debe tener ${childLength ?? ''} dígitos.`,
         }),
-      name: z.string().trim().min(1, 'El nombre es obligatorio.'),
+      name: z
+        .string()
+        .trim()
+        .min(1, 'El nombre es obligatorio.')
+        .max(MAX_NAME_LENGTH, `El nombre puede tener como máximo ${MAX_NAME_LENGTH} caracteres.`),
       nature: z.union([z.literal(''), z.enum(NATURES)]),
     })
     .superRefine((values, ctx) => {

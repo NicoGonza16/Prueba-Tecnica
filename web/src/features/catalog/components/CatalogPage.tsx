@@ -5,7 +5,7 @@ import type { Account, TreeNode } from '../api/types'
 import { useCatalog } from '../hooks/useCatalog'
 import { useTreeExpansion } from '../hooks/useTreeExpansion'
 import { ancestorCodesOf } from '../lib/accountCode'
-import { describeError, serverDetail } from '../lib/errorField'
+import { describeError } from '../lib/errorField'
 import { AccountTree } from './AccountTree'
 import { ConfirmDeleteDialog, type DeleteDialogResult } from './ConfirmDeleteDialog'
 import { CreateAccountForm } from './CreateAccountForm'
@@ -101,7 +101,6 @@ export function CatalogPage() {
             <ErrorMessage
               title="No se pudo cargar el catálogo"
               message={describeError(catalog.error)}
-              detail={serverDetail(catalog.error)}
               action={
                 <button
                   type="button"
