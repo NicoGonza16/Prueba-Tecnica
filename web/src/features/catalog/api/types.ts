@@ -25,7 +25,13 @@ export type CreateAccountInput = {
   nature?: Nature
 }
 
-/** Response of `POST /accounts` (201). */
+/** Body of `PATCH /accounts/:code` is `{ name }`; `code` goes in the URL. */
+export type RenameAccountInput = {
+  code: string
+  name: string
+}
+
+/** Response of `POST /accounts` (201) and `PATCH /accounts/:code` (200). */
 export type Account = {
   code: string
   name: string

@@ -1,7 +1,7 @@
 import type { z } from 'zod'
 import { ApiError, request } from '../../../lib/http'
 import { accountSchema, catalogSchema } from './accounts.schemas'
-import type { Account, CreateAccountInput, TreeNode } from './types'
+import type { Account, CreateAccountInput, RenameAccountInput, TreeNode } from './types'
 
 /** Validates a response against its schema so contract drift surfaces as a visible error. */
 function parseResponse<T>(schema: z.ZodType<T>, data: unknown): T {
@@ -24,6 +24,14 @@ export async function getCatalog(signal?: AbortSignal): Promise<TreeNode[]> {
 
 export async function createAccount(input: CreateAccountInput): Promise<Account> {
   const data = await request<unknown>('/accounts', { method: 'POST', body: input })
+  return parseResponse(accountSchema, data)
+}
+
+export async function renameAccount({ code, name }: RenameAccountInput): Promise<Account> {
+  const data = await request<unknown>(`/accounts/${encodeURIComponent(code)}`, {
+    method: 'PATCH',
+    body: { name },
+  })
   return parseResponse(accountSchema, data)
 }
 

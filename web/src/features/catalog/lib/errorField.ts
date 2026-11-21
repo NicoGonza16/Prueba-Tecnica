@@ -19,6 +19,13 @@ export function errorField(errorCode: string): AccountField | null {
   return FIELD_BY_ERROR_CODE[errorCode] ?? null
 }
 
+/** Message for an account that no longer exists on the server (ACCOUNT_NOT_FOUND). */
+export function accountGoneMessage(code?: string): string {
+  return code
+    ? `La cuenta ${code} ya no existe. El catálogo se ha actualizado.`
+    : 'La cuenta ya no existe. El catálogo se ha actualizado.'
+}
+
 type ErrorContext = {
   /** Account code involved in the operation, used to build specific messages. */
   code?: string
@@ -62,9 +69,7 @@ export function describeError(error: unknown, { code }: ErrorContext = {}): stri
         ? `No se puede eliminar la cuenta ${code} porque tiene cuentas hijas. Elimina primero sus hijas.`
         : 'No se puede eliminar porque la cuenta tiene cuentas hijas. Elimina primero sus hijas.'
     case 'ACCOUNT_NOT_FOUND':
-      return code
-        ? `La cuenta ${code} ya no existe. El catálogo se ha actualizado.`
-        : 'La cuenta ya no existe. El catálogo se ha actualizado.'
+      return accountGoneMessage(code)
     case 'VALIDATION_ERROR':
       return 'Los datos enviados no tienen el formato esperado. Revisa los campos e inténtalo de nuevo.'
     case 'INTERNAL_ERROR':

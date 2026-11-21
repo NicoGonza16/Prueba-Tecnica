@@ -35,8 +35,15 @@ export const accountSchema: z.ZodType<Account> = z.object({
 })
 
 /* ------------------------------------------------------------------ */
-/* Form schema: client-side validation before calling POST /accounts   */
+/* Form schemas: client-side validation before calling the API         */
 /* ------------------------------------------------------------------ */
+
+/** Account name rule shared by create and rename (same limits as the API). */
+export const accountNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'El nombre es obligatorio.')
+  .max(MAX_NAME_LENGTH, `El nombre puede tener como máximo ${MAX_NAME_LENGTH} caracteres.`)
 
 export type ParentContext = {
   code: string
@@ -75,11 +82,7 @@ export function buildCreateAccountSchema(parent?: ParentContext) {
         .refine((code) => childLength === null || code.length === childLength, {
           message: `Una cuenta hija de ${parent?.code ?? ''} debe tener ${childLength ?? ''} dígitos.`,
         }),
-      name: z
-        .string()
-        .trim()
-        .min(1, 'El nombre es obligatorio.')
-        .max(MAX_NAME_LENGTH, `El nombre puede tener como máximo ${MAX_NAME_LENGTH} caracteres.`),
+      name: accountNameSchema,
       nature: z.union([z.literal(''), z.enum(NATURES)]),
     })
     .superRefine((values, ctx) => {
@@ -102,3 +105,9 @@ export function toCreateAccountInput(values: CreateAccountFormOutput): CreateAcc
   if (values.code.length === 1 && values.nature !== '') input.nature = values.nature
   return input
 }
+
+/** Inline rename form (`PATCH /accounts/:code`). */
+export const renameAccountSchema = z.object({ name: accountNameSchema })
+
+export type RenameAccountFormValues = z.input<typeof renameAccountSchema>
+export type RenameAccountFormOutput = z.output<typeof renameAccountSchema>

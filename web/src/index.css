@@ -18,6 +18,8 @@
   --success: #067647;
   --success-bg: #ecfdf3;
   --highlight: #fff7d6;
+  --match-bg: #d7e6ff;
+  --match-text: #0b3a82;
   --focus: #2e6fd8;
 
   --debit: #175cd3;
@@ -61,6 +63,8 @@
     --success: #47cd89;
     --success-bg: #11281d;
     --highlight: #3a3315;
+    --match-bg: #1d3a66;
+    --match-text: #cfe0ff;
     --focus: #6ba1f3;
 
     --debit: #84caff;
@@ -347,15 +351,42 @@ input {
 .empty-state__title {
   font-weight: 600;
   margin-bottom: 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.empty-state__action {
+  margin-top: 0.75rem;
 }
 
 /* ---------- Tree ---------- */
 .tree-panel__toolbar {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.5rem;
+  flex: 1 1 20rem;
   flex-wrap: wrap;
   font-size: 0.85rem;
+}
+
+/* Search box of the tree panel */
+.catalog-search {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1 1 14rem;
+  max-width: 26rem;
+}
+
+.catalog-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.3rem 0.6rem;
+}
+
+/* Our own "Limpiar búsqueda" button replaces the native clear control. */
+.catalog-search__input::-webkit-search-cancel-button {
+  appearance: none;
 }
 
 .tree,
@@ -367,8 +398,10 @@ input {
 
 .tree-node__row {
   display: flex;
+  flex-wrap: wrap; /* if name + badges + actions don't fit, actions drop to a new line */
   align-items: center;
   gap: 0.5rem;
+  row-gap: 0.25rem;
   padding-block: 0.3rem;
   padding-inline-end: 0.4rem;
   border-radius: var(--radius-small);
@@ -381,6 +414,18 @@ input {
 
 .tree-node__row--highlight {
   background: var(--highlight);
+}
+
+/* Part of the code / name matching the search (distinct from the row highlight). */
+.tree-node__match {
+  background: var(--match-bg);
+  color: var(--match-text);
+  border-radius: 2px;
+  padding: 0;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
 
 .tree-node__toggle {
@@ -424,9 +469,10 @@ input {
 }
 
 .tree-node__name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-wrap: anywhere;
+  /* A readable minimum width: without it the name shrinks to ~0 and breaks letter by letter. */
+  flex: 1 1 8rem;
+  min-width: 8rem;
+  overflow-wrap: break-word;
 }
 
 .tree-node__badges,
@@ -438,7 +484,42 @@ input {
 }
 
 .tree-node__actions {
-  margin-inline-start: 0.35rem;
+  /* Right-aligned, also when they wrap to their own line. */
+  margin-inline-start: auto;
+}
+
+/* Inline rename form: replaces the name inside the row */
+.tree-node__rename {
+  flex: 1 1 12rem;
+  min-width: 12rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tree-node__rename-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  padding: 0.25rem 0.5rem;
+}
+
+.tree-node__rename-input[readonly] {
+  opacity: 0.75;
+}
+
+.tree-node__rename-actions {
+  display: inline-flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.tree-node__rename-error {
+  flex-basis: 100%;
+}
+
+.tree-node__rename-error .error-message--compact {
+  margin: 0;
 }
 
 @media (max-width: 640px) {
@@ -450,6 +531,22 @@ input {
     order: 3;
     width: 100%;
     padding-inline-start: 2.1rem;
+  }
+
+  /* The input takes its own line; the buttons go below it. */
+  .tree-node__rename {
+    flex-basis: 100%;
+    order: 2;
+    padding-inline-start: 2.1rem;
+  }
+
+  .tree-node__rename-input {
+    flex-basis: 100%;
+  }
+
+  .catalog-search {
+    flex-basis: 100%;
+    max-width: none;
   }
 }
 
