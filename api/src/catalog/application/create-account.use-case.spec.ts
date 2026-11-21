@@ -6,6 +6,7 @@ import {
   InvalidAccountNameError,
   InvalidAccountNatureError,
   MissingNatureError,
+  NatureMismatchError,
   ParentAccountNotFoundError,
 } from '../domain/errors.js';
 import { CreateAccountUseCase } from './create-account.use-case.js';
@@ -49,22 +50,50 @@ describe('CreateAccountUseCase', () => {
     expect((repo.save.mock.calls[0][0] as Account).code.value).toBe('1');
   });
 
-  it('a non-class inherits the nature of its parent, ignoring the given one', async () => {
-    repo.findByCode.mockResolvedValue(
-      Account.create({ code: '2', name: 'Pasivo', nature: 'CREDIT' }),
-    );
-
-    const node = await useCase.execute({
-      code: '21',
-      name: 'Obligaciones financieras',
-      nature: 'DEBIT',
+  describe('a non-class account', () => {
+    beforeEach(() => {
+      repo.findByCode.mockResolvedValue(
+        Account.create({ code: '2', name: 'Pasivo', nature: 'CREDIT' }),
+      );
     });
 
-    expect(repo.findByCode.mock.calls[0][0].value).toBe('2');
-    expect(node.nature).toBe('CREDIT');
-    expect(node.level).toBe('GROUP');
-    expect(node.parentCode).toBe('2');
-    expect(repo.save).toHaveBeenCalledTimes(1);
+    it('inherits the nature of its parent when none is sent', async () => {
+      const node = await useCase.execute({
+        code: '21',
+        name: 'Obligaciones financieras',
+      });
+
+      expect(repo.findByCode.mock.calls[0][0].value).toBe('2');
+      expect(node.nature).toBe('CREDIT');
+      expect(node.level).toBe('GROUP');
+      expect(node.parentCode).toBe('2');
+      expect(repo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('accepts a sent nature equal to the inherited one', async () => {
+      const node = await useCase.execute({
+        code: '21',
+        name: 'Obligaciones financieras',
+        nature: 'CREDIT',
+      });
+
+      expect(node.nature).toBe('CREDIT');
+      expect(repo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a sent nature different from the inherited one', async () => {
+      await expect(
+        useCase.execute({ code: '21', name: 'Obligaciones', nature: 'DEBIT' }),
+      ).rejects.toThrow(NatureMismatchError);
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid sent nature', async () => {
+      await expect(
+        useCase.execute({ code: '21', name: 'Obligaciones', nature: 'FOO' }),
+      ).rejects.toThrow(InvalidAccountNatureError);
+      expect(repo.save).not.toHaveBeenCalled();
+    });
   });
 
   it('rejects an invalid code before touching the repository', async () => {

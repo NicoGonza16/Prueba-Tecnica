@@ -42,6 +42,18 @@ export class MissingNatureError extends DomainError {
   }
 }
 
+/**
+ * A non-class account was sent a nature different from the one it inherits.
+ * Descendants always inherit the nature of their class (rule 8). → 400
+ */
+export class NatureMismatchError extends DomainError {
+  constructor(code: string, requested: string, inherited: string) {
+    super(
+      `Account "${code}" inherits the nature ${inherited} from its class; it cannot be ${requested}.`,
+    );
+  }
+}
+
 /** The code already exists in the catalog (uniqueness rule). → 409 */
 export class DuplicateAccountCodeError extends DomainError {
   constructor(code: string) {

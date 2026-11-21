@@ -2,6 +2,9 @@ import { Code, type AccountLevel } from './code.js';
 import { InvalidAccountNameError } from './errors.js';
 import { toNature, type Nature } from './nature.js';
 
+/** Longest accepted account name, after trimming. */
+export const MAX_NAME_LENGTH = 100;
+
 export interface CreateAccountProps {
   code: string;
   name: string;
@@ -64,6 +67,11 @@ export class Account {
     const trimmed = (name ?? '').trim();
     if (trimmed.length === 0) {
       throw new InvalidAccountNameError('it must not be empty');
+    }
+    if (trimmed.length > MAX_NAME_LENGTH) {
+      throw new InvalidAccountNameError(
+        `it must have at most ${MAX_NAME_LENGTH} characters`,
+      );
     }
     return trimmed;
   }

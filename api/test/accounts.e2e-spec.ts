@@ -100,6 +100,43 @@ describe('Accounts (e2e)', () => {
       });
     });
 
+    it('400 NATURE_MISMATCH when a child is sent a nature other than its class', async () => {
+      await post({ code: '2', name: 'Pasivo', nature: 'CREDIT' }).expect(201);
+
+      const res = await post({ code: '21', name: 'Obligaciones', nature: 'DEBIT' });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({
+        code: 'NATURE_MISMATCH',
+        detail:
+          'Account "21" inherits the nature CREDIT from its class; it cannot be DEBIT.',
+      });
+    });
+
+    it('400 INVALID_NATURE when a child is sent an unknown nature', async () => {
+      await post({ code: '2', name: 'Pasivo', nature: 'CREDIT' }).expect(201);
+
+      const res = await post({ code: '21', name: 'Obligaciones', nature: 'FOO' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('INVALID_NATURE');
+    });
+
+    it('400 INVALID_NAME for a name over 100 characters', async () => {
+      const res = await post({ code: '1', name: 'a'.repeat(101), nature: 'DEBIT' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('INVALID_NAME');
+    });
+
+    it('413 PAYLOAD_TOO_LARGE for a body over the size limit, not a 500', async () => {
+      const res = await post({ code: '1', name: 'a'.repeat(200_000), nature: 'DEBIT' });
+
+      expect(res.status).toBe(413);
+      expect(res.body.code).toBe('PAYLOAD_TOO_LARGE');
+      expect(typeof res.body.detail).toBe('string');
+    });
+
     it('400 PARENT_NOT_FOUND when the parent does not exist', async () => {
       const res = await post({ code: '1105', name: 'Caja' });
 

@@ -1,4 +1,4 @@
-import { Account } from './account.js';
+import { Account, MAX_NAME_LENGTH } from './account.js';
 import {
   InvalidAccountCodeError,
   InvalidAccountNameError,
@@ -37,6 +37,21 @@ describe('Account', () => {
     it('rejects a blank name', () => {
       expect(() => Account.create({ code: '1', name: '   ', nature: 'DEBIT' })).toThrow(
         InvalidAccountNameError,
+      );
+    });
+
+    it(`accepts a name of ${MAX_NAME_LENGTH} characters and rejects a longer one`, () => {
+      const atLimit = 'a'.repeat(MAX_NAME_LENGTH);
+      expect(Account.create({ code: '1', name: atLimit, nature: 'DEBIT' }).name).toBe(atLimit);
+      expect(() =>
+        Account.create({ code: '1', name: `${atLimit}a`, nature: 'DEBIT' }),
+      ).toThrow(InvalidAccountNameError);
+    });
+
+    it('measures the limit after trimming', () => {
+      const padded = `  ${'a'.repeat(MAX_NAME_LENGTH)}  `;
+      expect(Account.create({ code: '1', name: padded, nature: 'DEBIT' }).name).toHaveLength(
+        MAX_NAME_LENGTH,
       );
     });
 
