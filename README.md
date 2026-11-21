@@ -109,8 +109,8 @@ Decisiones concretas:
   Para cambiar la persistencia basta con cambiar la línea
   `{ provide: ACCOUNT_REPOSITORY, useClass: InMemoryAccountRepository }`.
 - **Dónde vive cada regla.** Las que se pueden decidir con una sola cuenta
-  (formato y longitud del código, nivel, padre, nombre no vacío, naturaleza
-  válida) están en el dominio, dentro de `Code` y `Account`. Las que necesitan
+  (formato y longitud del código, nivel, padre, nombre no vacío y de hasta 100
+  caracteres, naturaleza válida) están en el dominio, dentro de `Code` y `Account`. Las que necesitan
   mirar el resto del catálogo (unicidad, que el padre exista, heredar su
   naturaleza, no borrar con hijas) están en los casos de uso, que consultan el
   repositorio.
@@ -118,7 +118,9 @@ Decisiones concretas:
   prefijo, no una cantidad.
 - **La naturaleza se resuelve al crear:** una clase la declara; cualquier otra
   cuenta copia la de su padre. Así cada cuenta lleva su naturaleza y el árbol
-  no necesita consultas extra.
+  no necesita consultas extra. Si un cliente envía `nature` para una cuenta que
+  no es clase, no se ignora en silencio: tiene que ser válida e igual a la
+  heredada, o la API responde `NATURE_MISMATCH` (regla 8).
 - **`allowsMovements` se calcula al leer**, no se guarda: depende de si la
   cuenta tiene hijas, que cambia cuando se crean o borran otras cuentas.
 - **Zod valida solo la forma** del request (que `code` y `name` sean texto).
@@ -126,7 +128,9 @@ Decisiones concretas:
   longitud 3, el error llegaría como validación genérica en vez de como
   `INVALID_CODE` del dominio.
 - **Errores.** El dominio lanza errores propios; un único filtro global los
-  traduce a HTTP con un cuerpo uniforme `{ code, detail }`.
+  traduce a HTTP con un cuerpo uniforme `{ code, detail }`. También conserva
+  el status de los errores de cliente que ocurren antes de llegar a Nest (un
+  body de más de 100 kB responde 413, no 500).
 
 ### Por qué persistencia en memoria
 
@@ -141,7 +145,7 @@ reiniciar la API.
 
 | Método | Ruta | Request | Respuesta |
 |---|---|---|---|
-| `POST` | `/accounts` | `{ code, name, nature? }` — `nature` solo para una clase; el resto la hereda | `201` con la cuenta creada |
+| `POST` | `/accounts` | `{ code, name, nature? }` — `nature` obligatoria para una clase; el resto la hereda (si se envía, debe coincidir) | `201` con la cuenta creada |
 | `GET` | `/accounts` | — | `200` con el árbol: `{ code, name, nature, level, allowsMovements, children[] }` |
 | `DELETE` | `/accounts/:code` | — | `204` |
 
@@ -150,13 +154,15 @@ Errores, siempre como `{ code, detail }`:
 | `code` | Status | Cuándo |
 |---|:---:|---|
 | `INVALID_CODE` | 400 | no numérico o longitud distinta de 1, 2, 4, 6 |
-| `INVALID_NAME` | 400 | nombre vacío |
+| `INVALID_NAME` | 400 | nombre vacío o de más de 100 caracteres |
 | `INVALID_NATURE` / `MISSING_NATURE` | 400 | naturaleza inválida / clase sin naturaleza |
+| `NATURE_MISMATCH` | 400 | se envía a una cuenta no clase una naturaleza distinta de la heredada (regla 8) |
 | `PARENT_NOT_FOUND` | 400 | el padre no existe (regla 4) |
 | `VALIDATION_ERROR` | 400 | el body no tiene la forma esperada |
 | `ACCOUNT_NOT_FOUND` | 404 | se intenta borrar una cuenta inexistente |
 | `DUPLICATE_CODE` | 409 | el código ya existe (regla 7) |
 | `HAS_CHILDREN` | 409 | se intenta borrar una cuenta con hijas (regla 5) |
+| `PAYLOAD_TOO_LARGE` | 413 | el body supera 100 kB |
 
 ### Pruebas
 
