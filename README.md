@@ -25,7 +25,7 @@ Abre http://localhost:5173.
 | `npm run dev` | API y front juntos, en modo watch |
 | `npm run dev:api` / `npm run dev:web` | Solo uno de los dos |
 | `npm run build` | Compila los dos |
-| `npm test` | Pruebas unitarias de la API (Vitest) |
+| `npm test` | Pruebas unitarias de la API y del front (Vitest) |
 | `npm run test:e2e --prefix api` | Pruebas e2e de la API (Supertest contra la app real) |
 | `npm run lint` | oxlint en los dos |
 
@@ -91,6 +91,7 @@ api/src/catalog/
     create-account.use-case.ts     #   unicidad, padre existente, herencia de naturaleza
     get-catalog.use-case.ts        #   lista → árbol
     delete-account.use-case.ts     #   rechaza si tiene hijas
+    rename-account.use-case.ts     #   cambia el nombre (la regla 1–100 la aplica la entidad)
     catalog-tree.ts                #   función pura que arma el árbol y calcula allowsMovements
     account.view.ts                #   forma de salida (AccountNode / TreeNode)
   infrastructure/                  # adaptadores
@@ -127,6 +128,11 @@ Decisiones concretas:
   Las reglas de negocio no se duplican ahí: si Zod rechazara un código de
   longitud 3, el error llegaría como validación genérica en vez de como
   `INVALID_CODE` del dominio.
+- **Renombrar no cambia el puerto.** El caso de uso carga la cuenta, llama a
+  `Account.rename` (que valida) y la guarda con `save`, que el puerto ya define
+  como "insertar o actualizar". Añadir un `update`/`rename` al repositorio
+  metería intención de negocio en la persistencia. El body de `PATCH` es
+  estricto: si llega `code` o `nature` se rechaza en vez de ignorarlo.
 - **Errores.** El dominio lanza errores propios; un único filtro global los
   traduce a HTTP con un cuerpo uniforme `{ code, detail }`. También conserva
   el status de los errores de cliente que ocurren antes de llegar a Nest (un
@@ -147,6 +153,7 @@ reiniciar la API.
 |---|---|---|---|
 | `POST` | `/accounts` | `{ code, name, nature? }` — `nature` obligatoria para una clase; el resto la hereda (si se envía, debe coincidir) | `201` con la cuenta creada |
 | `GET` | `/accounts` | — | `200` con el árbol: `{ code, name, nature, level, allowsMovements, children[] }` |
+| `PATCH` | `/accounts/:code` | `{ name }` — solo el nombre; cualquier otra clave es `VALIDATION_ERROR` | `200` con la cuenta actualizada |
 | `DELETE` | `/accounts/:code` | — | `204` |
 
 Errores, siempre como `{ code, detail }`:
@@ -154,12 +161,12 @@ Errores, siempre como `{ code, detail }`:
 | `code` | Status | Cuándo |
 |---|:---:|---|
 | `INVALID_CODE` | 400 | no numérico o longitud distinta de 1, 2, 4, 6 |
-| `INVALID_NAME` | 400 | nombre vacío o de más de 100 caracteres |
+| `INVALID_NAME` | 400 | al crear o renombrar: nombre vacío o de más de 100 caracteres |
 | `INVALID_NATURE` / `MISSING_NATURE` | 400 | naturaleza inválida / clase sin naturaleza |
 | `NATURE_MISMATCH` | 400 | se envía a una cuenta no clase una naturaleza distinta de la heredada (regla 8) |
 | `PARENT_NOT_FOUND` | 400 | el padre no existe (regla 4) |
-| `VALIDATION_ERROR` | 400 | el body no tiene la forma esperada |
-| `ACCOUNT_NOT_FOUND` | 404 | se intenta borrar una cuenta inexistente |
+| `VALIDATION_ERROR` | 400 | el body no tiene la forma esperada (incluye claves extra en `PATCH`) |
+| `ACCOUNT_NOT_FOUND` | 404 | se intenta borrar o renombrar una cuenta inexistente |
 | `DUPLICATE_CODE` | 409 | el código ya existe (regla 7) |
 | `HAS_CHILDREN` | 409 | se intenta borrar una cuenta con hijas (regla 5) |
 | `PAYLOAD_TOO_LARGE` | 413 | el body supera 100 kB |
@@ -170,7 +177,10 @@ Errores, siempre como `{ code, detail }`:
   con un repositorio falso (`vi.fn()`, sin infraestructura), el armado del
   árbol y el repositorio en memoria. Hay un caso por regla.
 - **e2e** (`npm run test:e2e --prefix api`): la app real con Supertest; cubre
-  201/200/204 y cada 400/404/409 con su cuerpo `{ code, detail }`.
+  201/200/204 y cada 400/404/409/413 con su cuerpo `{ code, detail }`,
+  incluido el renombrado.
+- **Front** (`npm test --prefix web`): Vitest sobre las funciones puras
+  (`searchTree`, `accountCode`), sin DOM.
 
 ---
 
@@ -188,9 +198,10 @@ web/src/
   components/ui/                   # UI genérica: Spinner, ErrorMessage
   features/catalog/                # todo lo del catálogo junto
     api/                           #   frontera con la API: tipos del contrato, esquemas Zod, llamadas
-    hooks/                         #   useCatalog, useCreateAccount, useDeleteAccount, useTreeExpansion
-    lib/                           #   lógica pura sin React: reglas del código, error → campo
-    components/                    #   CatalogPage, AccountTree(Node), CreateAccountForm, ConfirmDeleteDialog
+    hooks/                         #   useCatalog, useCreateAccount, useDeleteAccount, useRenameAccount, useTreeExpansion
+    lib/                           #   lógica pura sin React: reglas del código, búsqueda (searchTree), error → campo
+    components/                    #   CatalogPage, CatalogSearch, AccountTree(Node), HighlightedText,
+                                   #   CreateAccountForm, RenameAccountForm, ConfirmDeleteDialog
 ```
 
 - **Por funcionalidad:** para cambiar o quitar el catálogo se toca una
@@ -209,10 +220,12 @@ web/src/
 | **@tanstack/react-query** | Estado del servidor: caché del árbol, estados de carga/error listos, e **invalidación** tras crear o borrar en lugar de recargar a mano. |
 | **zod** | Validación del formulario antes de enviar (dígitos, longitud, nombre, naturaleza solo para clases, prefijo de la hija) y validación de las respuestas de la API, para mostrar un error claro si el contrato cambia en vez de romper la pantalla. |
 | **react-hook-form** + **@hookform/resolvers** | Estado del formulario integrado con Zod; su `setError` coloca cada error de la API **junto a su campo** y le da foco. |
+| **vitest** (solo desarrollo) | Tests de las funciones puras del front. Es el mismo runner que usa la API, así que no entra una herramienta nueva. |
 
 Sin librería de componentes: la UI es chica y CSS propio basta. El diálogo es
 el `<dialog>` nativo (bloquea el fondo, atrapa el foco, cierra con Escape).
-Peticiones con `fetch` nativo.
+Peticiones con `fetch` nativo. La búsqueda no añade dependencias:
+`useDeferredValue` viene con React.
 
 ### Núcleo cubierto
 
@@ -224,6 +237,32 @@ Peticiones con `fetch` nativo.
 - **Carga y error** en todo: spinner, panel de error con Reintentar, estado
   vacío, "Creando…" / "Eliminando…", y un mensaje claro si la API no responde.
 
+### Búsqueda
+
+- **En el cliente, sin endpoint.** El árbol completo ya está en la caché de
+  React Query y un plan de cuentas tiene como mucho unos miles de nodos:
+  filtrarlo en memoria es instantáneo, sin latencia ni estados de carga extra.
+  Además buscar es presentación, no una regla de negocio. Un endpoint solo
+  tendría sentido si el árbol se cargara por partes.
+- **Qué coincide:** el código **empieza por** la consulta (`11` encuentra 11,
+  1105 y 110505) o el nombre la **contiene**, sin distinguir mayúsculas ni
+  tildes (`credito` encuentra «Crédito fiscal»).
+- **Qué se ve:** solo las cuentas que coinciden y sus ancestros, con las ramas
+  abiertas hasta cada coincidencia y la parte coincidente resaltada. Si no hay
+  resultados se dice y se ofrece limpiar.
+- **No pisa lo que abriste a mano:** la búsqueda usa una expansión temporal;
+  al limpiarla (botón o Escape) el árbol vuelve exactamente como estaba.
+- La lógica es una función pura (`lib/searchTree.ts`) con tests.
+
+### Renombrar
+
+- **En línea, en la propia fila**, y no en un diálogo: es una edición pequeña
+  de un campo, sin riesgo, y así se mantiene el contexto. El diálogo queda
+  para lo destructivo (eliminar).
+- Enter guarda, Escape cancela; al terminar el foco vuelve al botón
+  «Renombrar». Validación previa (1–100 caracteres) con el error junto al
+  campo; si el nombre no cambió, no se hace la petición.
+
 ---
 
 ## Opcionales elegidos y por qué
@@ -233,16 +272,16 @@ Peticiones con `fetch` nativo.
 | Mostrar **nivel y naturaleza** en el árbol | ✅ | Muy barato (ya vienen en la respuesta) y deja ver que el nivel por longitud y la naturaleza heredada se calculan bien. Añadí también "Admite movimientos" (regla 6). |
 | **Crear hija** desde el nodo con el código prellenado | ✅ | Refuerza la regla del prefijo y evita el error más común (equivocarse de padre o de longitud). Oculta la naturaleza y muestra la heredada. |
 | **Caché e invalidación** | ✅ | Sale casi gratis con React Query, que ya usaba para los estados de carga y error. |
-| Buscar por código o nombre | ❌ | Prioricé dejar el núcleo y la arquitectura bien probados. |
-| Renombrar desde el árbol | ❌ | La entidad ya tiene `rename`, pero no hice el caso de uso ni el endpoint. |
+| **Renombrar** desde el árbol | ✅ | La entidad ya tenía `rename` con su regla, así que en el backend solo hizo falta un caso de uso y `PATCH /accounts/:code`, sin tocar dominio ni puerto: muestra cómo crece la arquitectura. |
+| **Buscar** por código o nombre | ✅ | Es útil en cuanto el catálogo crece, y va en el cliente sobre el árbol ya cacheado (ver "Búsqueda"). Su lógica delicada (tildes, resaltado, ramas a abrir) quedó en una función pura con tests. |
+
+Con esto están los cinco opcionales.
 
 ## Qué dejé afuera
 
 - Persistencia real (los datos se pierden al reiniciar).
-- Búsqueda y renombrado.
-- Pruebas automatizadas del frontend: lo verifiqué con build, lint y probando
-  los flujos en el navegador contra la API real, pero no hay tests de
-  componentes.
+- Tests de componentes del frontend: hay tests de las funciones puras y probé
+  los flujos en el navegador contra la API real, pero no hay tests con DOM.
 - Un esquema compartido entre API y front: las reglas de formato del código
   están replicadas en `web/src/features/catalog/lib/accountCode.ts`. La API
   sigue siendo la fuente de verdad y su respuesta siempre se muestra.
@@ -252,17 +291,19 @@ Peticiones con `fetch` nativo.
 1. **Adaptador de base de datos** (p. ej. SQLite con `@nestjs/drizzle`)
    implementando `AccountRepository`, con restricción `UNIQUE` sobre el código
    como última defensa ante dos altas simultáneas del mismo código.
-2. **Tests del frontend** con Vitest + Testing Library: las funciones puras de
-   `lib/`, el formulario (errores por campo) y el diálogo.
-3. **Renombrar** (caso de uso + `PATCH /accounts/:code`) y **búsqueda** que
-   abra las ramas con coincidencias.
-4. **Contrato compartido** (un paquete con los tipos y esquemas) para no
+2. **Tests de componentes** con Testing Library: el formulario (errores por
+   campo), el renombrado en línea y el diálogo.
+3. **Contrato compartido** (un paquete con los tipos y esquemas) para no
    duplicar reglas entre API y front, y documentación OpenAPI.
+4. **Búsqueda en el servidor** (un `SearchAccountsUseCase` y un método en el
+   puerto), solo si el árbol pasara a cargarse por partes.
 
 ## Cómo se trabajó
 
-Usé tres subagentes definidos en `.claude/agents/`: un **arquitecto** (solo
-lectura) que diseñó el contrato de API y repartió el trabajo, y dos
+Usé subagentes definidos en `.claude/agents/`: un **arquitecto** (solo
+lectura) que diseñó el contrato de API y repartió el trabajo, dos
 implementadores (**backend-nestjs** y **frontend-react**) que trabajaron en
-paralelo sobre ese contrato. Revisé lo que entregó cada uno, corrí de nuevo las
-pruebas y probé los flujos en el navegador.
+paralelo sobre ese contrato, y un **auditor** (solo lectura) que verificó con
+evidencia cada regla de negocio contra el código y la API real. Revisé lo que
+entregó cada uno, corrí de nuevo las pruebas y probé los flujos en el
+navegador.
